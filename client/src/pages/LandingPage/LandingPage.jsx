@@ -6,7 +6,7 @@ import Team from '../../components/Landing/Team'
  
  const LandingPage = () => {
    return (
-     <div className=" py-20">
+     <div className=" py-20 text-white">
        <Hero />
        <HowItWorks />
        <Featers />

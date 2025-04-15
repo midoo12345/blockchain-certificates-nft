@@ -4,7 +4,7 @@ import HeroImage from '../../assets/hero.svg';
 
 const Hero = () => {
     return (
-        <div className="bg-gradient-to-br to-[#150042] from-slate-950 m-0 relative overflow-hidden">
+        <div className="bg-gradient-to-br   m-0 relative overflow-hidden">
             {/* Grid of small squares background */}
          
             <div className="absolute inset-0 overflow-hidden">
@@ -36,19 +36,20 @@ const Hero = () => {
                 <div className="relative px-6 mx-auto max-w-7xl sm:px-6 lg:px-8">
                     <div className="grid grid-cols-1 gap-y-4 lg:items-center lg:grid-cols-2 xl:grid-cols-2">
                         <div className="text-center xl:col-span-1 lg:text-left md:px-16 lg:px-0 xl:pr-20">
-                            <h1 className="text-3xl font-bold leading-tight text-white sm:text-5xl sm:leading-tight lg:leading-tight ">
+                            <h1 className="text-3xl font-bold leading-tight bg-gradient-to-r from-blue-400 via-purple-400 to-indigo-100 text-transparent bg-clip-text animate-gradient-x sm:text-5xl sm:leading-tight lg:leading-tight">
                                 Create Verified Digital Certificates as NFTs
                             </h1>
+
                             <p className="mt-2 text-xl text-gray-300 sm:mt-6">
                                 Securely issue, verify, and manage digital certificates on the blockchain. Perfect for educational institutions, professional organizations, and certification authorities.
                             </p>
 
-                            <Link to={"/dashboard"} className="inline-flex px-8 py-4 mt-8 text-lg font-bold text-gray-100 transition-all duration-200 bg-violet-600 border border-transparent rounded sm:mt-10 hover:bg-violet-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-violet-500" role="button">
-                                Create Your First Certificate
+                            <Link to={"/dashboard"} className="ES-btn inline-flex  mt-8 text-lg font-bold text-gray-100  sm:mt-10    " role="button">
+                                Get Started
                            
                             </Link>
 
-                            <div className="mt-8 sm:mt-16">
+                            <div className="mt-8">
                                 <div className="flex items-center justify-center lg:justify-start">
                                     <svg className="w-5 h-5 text-yellow-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
                                         <path
