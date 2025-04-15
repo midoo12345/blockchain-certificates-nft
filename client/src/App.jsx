@@ -76,7 +76,7 @@ function App() {
 
   return (
     <Router>
-      <div className="App flex flex-col min-h-screen">
+      <div className="App flex flex-col min-h-screen bg-slate-950">
         {/* Navbar shown on all pages */}
         <Navbar userAccount={userAccount} />
 
