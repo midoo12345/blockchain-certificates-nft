@@ -2,7 +2,7 @@
  
  const UpdateCertificate = () => {
    return (
-     <div className='mt-28'>UpdateCertificate</div>
+     <div className='mt-28 text-white'>UpdateCertificate</div>
    )
  }
  

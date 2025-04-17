@@ -1,8 +1,11 @@
 import React from 'react'
+import CourseManagement from '../../components/CourseManagement'
 
-const ManageCourses = () => {
+const ManageCourses = ({ isInstitution }) => {
   return (
-    <div className='mt-28'>ManageCourses</div>
+    <div className='mt-10'>
+      <CourseManagement isInstitution={isInstitution} />
+    </div>
   )
 }
 
