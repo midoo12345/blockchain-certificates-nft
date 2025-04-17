@@ -2,11 +2,13 @@ import React, { useState, useCallback, useEffect } from 'react';
 import { ethers } from 'ethers';
 import contractAddress from '../config/contractAddress.json';
 import contractABI from '../config/abi.json';
-import { uploadToIPFS, addToMFS } from '../utils/ipfs';
+import { uploadToIPFS, uploadJSONToIPFS, createOrGetCourseGroup } from '../utils/ipfs';
 import { validateEthereumAddress, validateGrade } from '../utils/validation';
 import LoadingSpinner from '../components/Shared/LoadingSpinner';
+import PINATA_CONFIG from '../config/pinata';
+ 
 
-const LOCAL_GATEWAY = 'http://localhost:8084';
+// Set constants
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 const ALLOWED_FILE_TYPES = ['image/jpeg', 'image/png', 'image/gif'];
 const COURSES_CACHE_KEY = 'courses_cache';
@@ -236,92 +238,131 @@ function CertificateForm() {
       setImageCID(null);
       setUploadProgress(0);
 
-      // 1. Upload image to IPFS with progress tracking
-      setUploadProgress(10);
-      const imageCID = await uploadToIPFS(certificateImage, (progress) => {
-        setUploadProgress(10 + (progress * 0.4)); // 10-50% for image upload
-      });
-      setImageCID(imageCID);
-      setUploadProgress(50);
-
-      // 2. Add image to MFS - this is now optional and won't break the flow if it fails
-      setUploadProgress(60);
       try {
-        await addToMFS(imageCID, certificateImage.name);
-      } catch (mfsError) {
-        console.warn("MFS operation failed but continuing with minting:", mfsError);
-        // Continue with the process - MFS operations are not critical
+        // Get the course name to include in metadata
+        const selectedCourse = courses.find(course => course.id === formData.courseId);
+        const courseName = selectedCourse ? selectedCourse.name : "Unknown Course";
+
+        // Create or get a group for this course
+        setUploadProgress(5);
+        const groupId = await createOrGetCourseGroup(formData.courseId, courseName);
+        if (groupId) {
+          console.log(`Using course group: ${groupId}`);
+        } else {
+          console.warn('Could not create or find a group for this course. Continuing without group organization.');
+        }
+
+        // 1. Upload image to IPFS with progress tracking
+        setUploadProgress(10);
+        const imageCID = await uploadToIPFS(
+          certificateImage,
+          (progress) => {
+            setUploadProgress(10 + (progress * 0.4)); // 10-50% for image upload
+          },
+          formData.courseId,
+          formData.studentAddress,
+          'cert',
+          groupId
+        );
+
+        if (!imageCID) {
+          throw new Error("Failed to get CID from image upload");
+        }
+
+        setImageCID(imageCID);
+        setUploadProgress(50);
+
+        // 2. Create and upload metadata
+        setUploadProgress(70);
+
+        const metadata = {
+          name: formData.certificateData,
+          description: "Academic Certificate",
+          image: `ipfs://${imageCID}`,
+          attributes: [
+            {
+              trait_type: "Course ID",
+              value: formData.courseId
+            },
+            {
+              trait_type: "Course Name",
+              value: courseName
+            },
+            {
+              trait_type: "Grade",
+              value: formData.grade
+            },
+            {
+              trait_type: "Issue Date",
+              value: new Date().toISOString()
+            },
+            {
+              trait_type: "Student Address",
+              value: formData.studentAddress
+            }
+          ],
+          // Also include top-level properties for easier access
+          courseId: formData.courseId,
+          courseName: courseName,
+          grade: formData.grade,
+          studentAddress: formData.studentAddress,
+          issueDate: new Date().toISOString()
+        };
+
+        const metadataCID = await uploadJSONToIPFS(
+          metadata,
+          (progress) => {
+            setUploadProgress(70 + (progress * 0.3)); // 70-100% for metadata upload
+          },
+          formData.courseId,
+          formData.studentAddress,
+          groupId
+        );
+
+        if (!metadataCID) {
+          throw new Error("Failed to get CID from metadata upload");
+        }
+
+        setMetadataCID(metadataCID);
+        setUploadProgress(100);
+
+        // 3. Mint the certificate on blockchain
+        const provider = new ethers.BrowserProvider(window.ethereum);
+        const signer = await provider.getSigner();
+        const contract = new ethers.Contract(
+          contractAddress.CertificateNFT,
+          contractABI.CertificateNFT,
+          signer
+        );
+
+        const tx = await contract.issueCertificate(
+          formData.studentAddress,
+          formData.courseId,
+          formData.grade,
+          `ipfs://${metadataCID}`
+        );
+        await tx.wait();
+
+        setSuccess('Certificate issued successfully!');
+
+        // Reset form
+        setFormData({
+          studentAddress: '',
+          courseId: '',
+          grade: '',
+          certificateData: '',
+        });
+        setCertificateImage(null);
+        setImagePreview(null);
+        setUploadProgress(0);
+      } catch (uploadError) {
+        console.error("Upload error:", uploadError);
+        throw new Error(`Failed to upload files: ${uploadError.message}`);
       }
-      setUploadProgress(70);
-
-      // 3. Create and upload metadata
-      setUploadProgress(80);
-      const metadata = {
-        name: formData.certificateData,
-        description: "Academic Certificate",
-        image: imageCID,
-        attributes: [{
-          trait_type: "Course ID",
-          value: formData.courseId
-        }, {
-          trait_type: "Grade",
-          value: formData.grade
-        }, {
-          trait_type: "Issue Date",
-          value: new Date().toISOString()
-        }]
-      };
-
-      const metadataBlob = new Blob([JSON.stringify(metadata)], { type: 'application/json' });
-      const metadataCID = await uploadToIPFS(metadataBlob, (progress) => {
-        setUploadProgress(80 + (progress * 0.2)); // 80-100% for metadata upload
-      });
-      setMetadataCID(metadataCID);
-      setUploadProgress(100);
-
-      // 4. Add metadata to MFS - this is now optional and won't break the flow if it fails
-      const metadataFileName = `${formData.certificateData.replace(/\s+/g, '_')}.json`;
-      try {
-        await addToMFS(metadataCID, metadataFileName);
-      } catch (mfsError) {
-        console.warn("Metadata MFS operation failed but continuing with minting:", mfsError);
-        // Continue with the process - MFS operations are not critical
-      }
-
-      // 5. Mint the certificate on blockchain
-      const provider = new ethers.BrowserProvider(window.ethereum);
-      const signer = await provider.getSigner();
-      const contract = new ethers.Contract(
-        contractAddress.CertificateNFT,
-        contractABI.CertificateNFT,
-        signer
-      );
-
-      const tx = await contract.issueCertificate(
-        formData.studentAddress,
-        formData.courseId,
-        formData.grade,
-        `ipfs://${metadataCID}`
-      );
-      await tx.wait();
-
-      setSuccess('Certificate issued successfully!');
-
-      // Reset form
-      setFormData({
-        studentAddress: '',
-        courseId: '',
-        grade: '',
-        certificateData: '',
-      });
-      setCertificateImage(null);
-      setImagePreview(null);
-      setUploadProgress(0);
-
     } catch (error) {
       console.error("Minting error:", error);
-      if (error.message.includes('IPFS')) {
-        setError('Failed to connect to IPFS. Please try again later.');
+      if (error.message.includes('IPFS') || error.message.includes('Pinata') || error.message.includes('upload')) {
+        setError('Failed to upload to IPFS. Please try again later. Error: ' + error.message);
       } else if (error.message.includes('user rejected')) {
         setError('Transaction was rejected by user');
       } else {
@@ -359,242 +400,170 @@ function CertificateForm() {
   };
 
   return (
-    <div className="space-y-6">
-      {error && (
-        <div className="p-4 mb-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900/50 dark:text-red-400">
-          {error}
-        </div>
-      )}
-      {success && (
-        <div className="p-4 mb-4 text-sm text-green-800 rounded-lg bg-green-50 dark:bg-green-900/50 dark:text-green-400">
-          {success}
-        </div>
-      )}
+    <div className="certificate-form">
+      <h2>Issue New Certificate</h2>
 
-      <div className="space-y-4">
-        <div>
-          <label className="block text-sm font-medium text-gray-300 mb-2">
-            Student Address
-          </label>
-          <input
-            type="text"
-            name="studentAddress"
-            value={formData.studentAddress}
-            onChange={handleInputChange}
-            placeholder="0x..."
-            disabled={loading}
-            className={`w-full px-4 py-2 rounded-lg bg-gray-700 border ${validationErrors.studentAddress && touchedFields.studentAddress
-                ? 'border-red-500 focus:ring-red-500'
-                : 'border-gray-600 focus:ring-purple-500'
-              } text-white placeholder-gray-400 focus:outline-none focus:ring-2`}
-          />
-          {validationErrors.studentAddress && touchedFields.studentAddress && (
-            <p className="mt-1 text-sm text-red-500">{validationErrors.studentAddress}</p>
-          )}
-        </div>
+      {error && <div className="error-message">{error}</div>}
+      {success && <div className="success-message">{success}</div>}
 
-        <div>
-          <label className="block text-sm font-medium text-gray-300 mb-2">
-            Course
-          </label>
-          <select
-            name="courseId"
-            value={formData.courseId}
-            onChange={handleInputChange}
-            disabled={loading || loadingCourses}
-            className={`w-full px-4 py-2 rounded-lg bg-gray-700 border ${validationErrors.courseId && touchedFields.courseId
-                ? 'border-red-500 focus:ring-red-500'
-                : 'border-gray-600 focus:ring-purple-500'
-              } text-white focus:outline-none focus:ring-2`}
-          >
-            <option value="">Select a course</option>
-            {loadingCourses ? (
-              <option disabled>Loading courses...</option>
-            ) : (
-              courses.map(course => (
-                <option key={course.id} value={course.id}>
-                  {course.name}
-                </option>
-              ))
-            )}
-          </select>
-          {validationErrors.courseId && touchedFields.courseId && (
-            <p className="mt-1 text-sm text-red-500">{validationErrors.courseId}</p>
-          )}
-          {loadingCourses && (
-            <div className="flex items-center mt-2 text-gray-400">
-              <LoadingSpinner size="small" />
-              <span className="ml-2">Loading courses...</span>
-            </div>
-          )}
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-300 mb-2">
-            Grade
-          </label>
-          <input
-            type="text"
-            name="grade"
-            value={formData.grade}
-            onChange={handleInputChange}
-            placeholder="A, B, C, D, F"
-            disabled={loading}
-            className={`w-full px-4 py-2 rounded-lg bg-gray-700 border ${validationErrors.grade && touchedFields.grade
-                ? 'border-red-500 focus:ring-red-500'
-                : 'border-gray-600 focus:ring-purple-500'
-              } text-white placeholder-gray-400 focus:outline-none focus:ring-2`}
-          />
-          {validationErrors.grade && touchedFields.grade && (
-            <p className="mt-1 text-sm text-red-500">{validationErrors.grade}</p>
-          )}
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-300 mb-2">
-            Certificate Title
-          </label>
-          <input
-            type="text"
-            name="certificateData"
-            value={formData.certificateData}
-            onChange={handleInputChange}
-            placeholder="e.g. Computer Science Degree"
-            disabled={loading}
-            className={`w-full px-4 py-2 rounded-lg bg-gray-700 border ${validationErrors.certificateData && touchedFields.certificateData
-                ? 'border-red-500 focus:ring-red-500'
-                : 'border-gray-600 focus:ring-purple-500'
-              } text-white placeholder-gray-400 focus:outline-none focus:ring-2`}
-          />
-          {validationErrors.certificateData && touchedFields.certificateData && (
-            <p className="mt-1 text-sm text-red-500">{validationErrors.certificateData}</p>
-          )}
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-300 mb-2">
-            Certificate Image
-          </label>
-          <div className="flex items-center justify-center w-full">
-            <label
-              htmlFor="certificate-image"
-              className={`flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-lg cursor-pointer ${validationErrors.certificateImage && touchedFields.certificateImage
-                  ? 'border-red-500 hover:bg-red-900/10'
-                  : 'border-gray-600 hover:bg-gray-700'
-                }`}
-            >
-              <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                <svg
-                  className="w-8 h-8 mb-4 text-gray-400"
-                  aria-hidden="true"
-                  xmlns="http://www.w3.org/2000/svg"
-                  fill="none"
-                  viewBox="0 0 20 16"
-                >
-                  <path
-                    stroke="currentColor"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth="2"
-                    d="M13 13h3a3 3 0 0 0 0-6h-.025A5.56 5.56 0 0 0 16 6.5 5.5 5.5 0 0 0 5.207 5.021C5.137 5.017 5.071 5 5 5a4 4 0 0 0 0 8h2.167M10 15V6m0 0L8 8m2-2 2 2"
-                  />
-                </svg>
-                <p className="mb-2 text-sm text-gray-400">
-                  <span className="font-semibold">Click to upload</span> or drag and drop
-                </p>
-                <p className="text-xs text-gray-400">
-                  PNG, JPG or GIF (MAX. 5MB)
-                </p>
-              </div>
-              <input
-                id="certificate-image"
-                type="file"
-                accept="image/*"
-                onChange={handleImageUpload}
-                disabled={loading}
-                className="hidden"
-              />
-            </label>
-          </div>
-          {validationErrors.certificateImage && touchedFields.certificateImage && (
-            <p className="mt-1 text-sm text-red-500">{validationErrors.certificateImage}</p>
-          )}
-        </div>
-
-        {imagePreview && (
-          <div className="mt-4">
-            <label className="block text-sm font-medium text-gray-300 mb-2">
-              Preview
-            </label>
-            <div className="relative w-full h-48 rounded-lg overflow-hidden">
-              <img
-                src={imagePreview}
-                alt="Certificate preview"
-                className="w-full h-full object-contain"
-              />
-            </div>
-          </div>
+      <div className="form-group">
+        <label className="form-label">Student Address:</label>
+        <input
+          type="text"
+          name="studentAddress"
+          value={formData.studentAddress}
+          onChange={handleInputChange}
+          placeholder="0x..."
+          disabled={loading}
+          className={`form-input ${validationErrors.studentAddress && touchedFields.studentAddress ? 'is-invalid' : ''}`}
+        />
+        {validationErrors.studentAddress && touchedFields.studentAddress && (
+          <div className="form-feedback is-invalid">{validationErrors.studentAddress}</div>
         )}
+      </div>
 
-        {loading && (
-          <div className="mt-4">
-            <div className="w-full bg-gray-700 rounded-full h-2.5">
-              <div
-                className="bg-purple-600 h-2.5 rounded-full transition-all duration-300"
-                style={{ width: `${uploadProgress}%` }}
-              ></div>
-            </div>
-            <p className="mt-2 text-sm text-gray-400 text-center">
-              {uploadProgress < 50
-                ? 'Uploading image...'
-                : uploadProgress < 80
-                  ? 'Processing metadata...'
-                  : 'Minting certificate...'}
-            </p>
-          </div>
+      <div className="form-group">
+        <label className="form-label">Course:</label>
+        <select
+          name="courseId"
+          value={formData.courseId}
+          onChange={handleInputChange}
+          disabled={loading || loadingCourses}
+          className={`form-input ${validationErrors.courseId && touchedFields.courseId ? 'is-invalid' : ''}`}
+        >
+          <option value="">Select a course</option>
+          {loadingCourses ? (
+            <option disabled>Loading courses...</option>
+          ) : (
+            courses.map(course => (
+              <option key={course.id} value={course.id}>
+                {course.name}
+              </option>
+            ))
+          )}
+        </select>
+        {validationErrors.courseId && touchedFields.courseId && (
+          <div className="form-feedback is-invalid">{validationErrors.courseId}</div>
         )}
-
-        <div className="flex justify-center mt-6">
-          <button
-            onClick={mintCertificate}
-            disabled={loading}
-            className="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white font-medium rounded-lg transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {loading ? (
-              <span className="flex items-center">
-                <LoadingSpinner size="small" className="mr-2" />
-                Processing...
-              </span>
-            ) : (
-              'Mint Certificate'
-            )}
-          </button>
-        </div>
-
-        {metadataCID && imageCID && (
-          <div className="mt-6 p-4 bg-gray-800 rounded-lg">
-            <p className="text-green-400 mb-4">✅ Successfully saved to IPFS!</p>
-            <div className="flex space-x-4">
-              <a
-                href={`${LOCAL_GATEWAY}/ipfs/${metadataCID}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors duration-200"
-              >
-                View Metadata
-              </a>
-              <a
-                href={`${LOCAL_GATEWAY}/ipfs/${imageCID}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors duration-200"
-              >
-                View Image
-              </a>
-            </div>
+        {loadingCourses && (
+          <div className="loading-courses">
+            <LoadingSpinner size="small" />
+            <span>Loading courses...</span>
           </div>
         )}
       </div>
+
+      <div className="form-group">
+        <label className="form-label">Grade:</label>
+        <input
+          type="text"
+          name="grade"
+          value={formData.grade}
+          onChange={handleInputChange}
+          placeholder="A, B, C, D, F"
+          disabled={loading}
+          className={`form-input ${validationErrors.grade && touchedFields.grade ? 'is-invalid' : ''}`}
+        />
+        {validationErrors.grade && touchedFields.grade && (
+          <div className="form-feedback is-invalid">{validationErrors.grade}</div>
+        )}
+      </div>
+
+      <div className="form-group">
+        <label className="form-label">Certificate Title:</label>
+        <input
+          type="text"
+          name="certificateData"
+          value={formData.certificateData}
+          onChange={handleInputChange}
+          placeholder="e.g. Computer Science Degree"
+          disabled={loading}
+          className={`form-input ${validationErrors.certificateData && touchedFields.certificateData ? 'is-invalid' : ''}`}
+        />
+        {validationErrors.certificateData && touchedFields.certificateData && (
+          <div className="form-feedback is-invalid">{validationErrors.certificateData}</div>
+        )}
+      </div>
+
+      <div className="form-group">
+        <label className="form-label">Certificate Image:</label>
+        <div className="form-file">
+          <input
+            type="file"
+            id="certificate-image"
+            accept="image/*"
+            onChange={handleImageUpload}
+            disabled={loading}
+            className={`form-file-input ${validationErrors.certificateImage && touchedFields.certificateImage ? 'is-invalid' : ''}`}
+          />
+          <label htmlFor="certificate-image" className="form-file-label">
+            {certificateImage?.name || "Select Image (PNG/JPG/GIF, max 5MB)"}
+          </label>
+        </div>
+        {validationErrors.certificateImage && touchedFields.certificateImage && (
+          <div className="form-feedback is-invalid">{validationErrors.certificateImage}</div>
+        )}
+      </div>
+
+      {imagePreview && (
+        <div className="image-preview">
+          <img src={imagePreview} alt="Certificate preview" />
+        </div>
+      )}
+
+      {loading && (
+        <div className="upload-progress">
+          <div className="progress-bar">
+            <div
+              className="progress-fill"
+              style={{ width: `${uploadProgress}%` }}
+            />
+          </div>
+          <div className="progress-text">
+            {uploadProgress < 50 ? 'Uploading image...' :
+              uploadProgress < 80 ? 'Processing metadata...' :
+                'Minting certificate...'}
+          </div>
+        </div>
+      )}
+
+      <div className="form-actions">
+        <button
+          onClick={mintCertificate}
+          disabled={loading}
+          className="btn submit-btn"
+        >
+          {loading ? 'Processing...' : 'Mint Certificate'}
+        </button>
+      </div>
+
+      {metadataCID && imageCID && (
+        <div className="ipfs-links">
+          <p className="success-message">✅ Successfully saved to IPFS!</p>
+
+          <div className="ipfs-link">
+            <a
+              href={`https://${PINATA_CONFIG.gateway}/ipfs/${metadataCID}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn btn-secondary"
+            >
+              View Metadata
+            </a>
+          </div>
+
+          <div className="ipfs-link">
+            <a
+              href={`https://${PINATA_CONFIG.gateway}/ipfs/${imageCID}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn btn-secondary"
+            >
+              View Image
+            </a>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
