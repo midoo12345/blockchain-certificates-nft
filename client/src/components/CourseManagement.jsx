@@ -1,16 +1,13 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { Contract, BrowserProvider } from 'ethers';
 import { contractAddress, contractABI } from '../config/contracts';
-import { useOutletContext } from 'react-router-dom';
-import LoadingSpinner from './Shard/LoadingSpinner';
-import '../styles/course-management.css';
+import LoadingSpinner from './Shared/LoadingSpinner';
 
 const ITEMS_PER_PAGE = 12;
 const COURSES_CACHE_KEY = 'courses_cache';
-const CACHE_EXPIRY = 5 * 60 * 1000; // 5 minutes in milliseconds
+const CACHE_EXPIRY = 5 * 60 * 1000;
 
-const CourseManagement = () => {
-  const { isInstitution } = useOutletContext();
+const CourseManagement = ({ isInstitution }) => {
   const [courses, setCourses] = useState([]);
   const [newCourseName, setNewCourseName] = useState('');
   const [loading, setLoading] = useState(false);
@@ -346,232 +343,133 @@ const CourseManagement = () => {
     fetchCourses();
   };
 
-  // Render the Add Course Modal
-  const renderAddCourseModal = () => {
-    if (!showModal) return null;
-
-    return (
-      <div className="modal-overlay" onClick={() => !actionLoading && setShowModal(false)}>
-        <div className="modal-content" onClick={e => e.stopPropagation()}>
-          <div className="modal-header">
-            <h3>Add New Course</h3>
-            <button
-              className="modal-close"
-              onClick={() => !actionLoading && setShowModal(false)}
-              disabled={actionLoading}
-            >
-              ×
-            </button>
-          </div>
-
-          <form onSubmit={handleAddCourse} className="course-form">
-            <div className="form-group">
-              <label htmlFor="courseName">Course Name:</label>
-              <input
-                type="text"
-                id="courseName"
-                value={newCourseName}
-                onChange={(e) => setNewCourseName(e.target.value)}
-                placeholder="Enter course name"
-                required
-                autoFocus
-                disabled={actionLoading}
-                className={`form-input ${validationErrors.courseName ? 'error' : ''}`}
-              />
-              {validationErrors.courseName && (
-                <div className="validation-error">{validationErrors.courseName}</div>
-              )}
-              <div className="form-help-text">
-                A unique ID will be automatically generated for this course
-              </div>
-            </div>
-
-            <div className="modal-actions">
-              <button
-                type="button"
-                className="btn btn-secondary"
-                onClick={() => !actionLoading && setShowModal(false)}
-                disabled={actionLoading}
-              >
-                Cancel
-              </button>
-              <button type="submit" className="btn btn-primary" disabled={actionLoading}>
-                {actionLoading ? (
-                  <div className="btn-loading-content">
-                    <span className="spinner-small"></span>
-                    Adding...
-                  </div>
-                ) : (
-                  'Add Course'
-                )}
-              </button>
-            </div>
-
-            {actionLoading && (
-              <div className="form-status-message">
-                <div className="blockchain-status">
-                  <span className="blockchain-icon">⛓️</span>
-                  <span>Transaction in progress...</span>
-                </div>
-                <div className="blockchain-help-text">
-                  Please wait while your transaction is being processed on the blockchain.
-                  This may take a few moments.
-                </div>
-              </div>
-            )}
-          </form>
-        </div>
-      </div>
-    );
-  };
-
   return (
-    <div className="page-container">
-      <div className="course-management-container">
-        <div className="courses-header">
-          <h2 className="card-title">Course Management</h2>
-          <div className="courses-controls">
-            <div className="search-box">
-              <input
-                type="text"
-                className="search-input"
-                placeholder="Search courses..."
-                value={searchTerm}
-                onChange={handleSearch}
-              />
-            </div>
-            <div className="sort-controls">
-              <button
-                className={`sort-btn ${sortConfig.key === 'id' ? 'active' : ''}`}
-                onClick={() => handleSort('id')}
-                aria-label={`Sort by ID ${sortConfig.key === 'id' ? (sortConfig.direction === 'asc' ? 'ascending' : 'descending') : ''}`}
-              >
-                <span>ID</span>
-                {sortConfig.key === 'id' && (
-                  <span className="sort-icon">
-                    {sortConfig.direction === 'asc' ? (
-                      <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="currentColor" viewBox="0 0 16 16">
-                        <path fillRule="evenodd" d="M8 15a.5.5 0 0 0 .5-.5V2.707l3.146 3.147a.5.5 0 0 0 .708-.708l-4-4a.5.5 0 0 0-.708 0l-4 4a.5.5 0 1 0 .708.708L7.5 2.707V14.5a.5.5 0 0 0 .5.5z" />
-                      </svg>
-                    ) : (
-                      <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="currentColor" viewBox="0 0 16 16">
-                        <path fillRule="evenodd" d="M8 1a.5.5 0 0 1 .5.5v11.793l3.146-3.147a.5.5 0 0 1 .708.708l-4 4a.5.5 0 0 1-.708 0l-4-4a.5.5 0 0 1 .708-.708L7.5 13.293V1.5A.5.5 0 0 1 8 1z" />
-                      </svg>
-                    )}
-                  </span>
-                )}
-              </button>
-              <button
-                className={`sort-btn ${sortConfig.key === 'name' ? 'active' : ''}`}
-                onClick={() => handleSort('name')}
-                aria-label={`Sort by Name ${sortConfig.key === 'name' ? (sortConfig.direction === 'asc' ? 'ascending' : 'descending') : ''}`}
-              >
-                <span>Name</span>
-                {sortConfig.key === 'name' && (
-                  <span className="sort-icon">
-                    {sortConfig.direction === 'asc' ? (
-                      <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="currentColor" viewBox="0 0 16 16">
-                        <path fillRule="evenodd" d="M8 15a.5.5 0 0 0 .5-.5V2.707l3.146 3.147a.5.5 0 0 0 .708-.708l-4-4a.5.5 0 0 0-.708 0l-4 4a.5.5 0 1 0 .708.708L7.5 2.707V14.5a.5.5 0 0 0 .5.5z" />
-                      </svg>
-                    ) : (
-                      <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="currentColor" viewBox="0 0 16 16">
-                        <path fillRule="evenodd" d="M8 1a.5.5 0 0 1 .5.5v11.793l3.146-3.147a.5.5 0 0 1 .708.708l-4 4a.5.5 0 0 1-.708 0l-4-4a.5.5 0 0 1 .708-.708L7.5 13.293V1.5A.5.5 0 0 1 8 1z" />
-                      </svg>
-                    )}
-                  </span>
-                )}
-              </button>
-            </div>
-            <div className="action-buttons">
-              <button
-                className="btn btn-secondary refresh-btn"
-                onClick={handleRefreshCourses}
-                disabled={loading}
-                aria-label="Refresh courses"
-              >
-                {loading ? <LoadingSpinner size="small" /> : (
-                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-                    <path fillRule="evenodd" d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 0 1 .908-.417A6 6 0 1 1 8 2z" />
-                    <path d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384L8.41 4.658A.25.25 0 0 1 8 4.466z" />
-                  </svg>
-                )}
-              </button>
-              <button
-                className="btn btn-primary add-course-btn"
-                onClick={() => setShowModal(true)}
-              >
-                Add New Course
-              </button>
+    <div className="min-h-screen bg-gray-900 p-6">
+      <div className="max-w-7xl mx-auto">
+        <div className="bg-gray-800 rounded-lg shadow-lg p-6">
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
+            <h2 className="text-2xl font-bold text-white mb-4 md:mb-0">Course Management</h2>
+            <div className="flex flex-col md:flex-row gap-4 w-full md:w-auto">
+              <div className="relative w-full md:w-64">
+                <input
+                  type="text"
+                  className="w-full px-4 py-2 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Search courses..."
+                  value={searchTerm}
+                  onChange={handleSearch}
+                />
+              </div>
+              <div className="flex gap-2">
+                <button
+                  className={`px-4 py-2 rounded-lg ${sortConfig.key === 'id'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                    }`}
+                  onClick={() => handleSort('id')}
+                >
+                  ID {sortConfig.key === 'id' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                </button>
+                <button
+                  className={`px-4 py-2 rounded-lg ${sortConfig.key === 'name'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                    }`}
+                  onClick={() => handleSort('name')}
+                >
+                  Name {sortConfig.key === 'name' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                </button>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  className="px-4 py-2 bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600 flex items-center gap-2"
+                  onClick={handleRefreshCourses}
+                  disabled={loading}
+                >
+                  {loading ? <LoadingSpinner size="small" /> : '↻'}
+                </button>
+                <button
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                  onClick={() => setShowModal(true)}
+                >
+                  Add New Course
+                </button>
+              </div>
             </div>
           </div>
-        </div>
 
-        <div className="message-container">
-          {error && <div className="error-message fade-in">{error}</div>}
-          {success && <div className="success-message fade-in">{success}</div>}
-        </div>
+          {error && (
+            <div className="mb-4 p-4 bg-red-500 text-white rounded-lg animate-fade-in">
+              {error}
+            </div>
+          )}
+          {success && (
+            <div className="mb-4 p-4 bg-green-500 text-white rounded-lg animate-fade-in">
+              {success}
+            </div>
+          )}
 
-        <div className="courses-section" ref={courseListRef}>
           {loading ? (
-            <div className="loading-container">
+            <div className="flex justify-center items-center h-64">
               <LoadingSpinner size="medium" text="Loading courses..." />
             </div>
           ) : sortedCourses.length === 0 ? (
-            <div className="no-data">
+            <div className="text-center text-gray-400 py-12">
               {searchTerm
                 ? 'No courses match your search'
-                : 'No courses found. Click "Add New Course" to create one.'
-              }
+                : 'No courses found. Click "Add New Course" to create one.'}
             </div>
           ) : (
             <>
-              <div className="courses-stats">
+              <div className="text-gray-400 mb-4">
                 Showing {paginatedCourses.length} of {sortedCourses.length} courses
               </div>
 
-              <div className="courses-grid">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {paginatedCourses.map((course) => (
-                  <div key={course.id} className="course-card">
-                    <div className="course-id-badge">{course.id}</div>
-                    <div className="course-name">{course.name}</div>
+                  <div
+                    key={course.id}
+                    className="bg-gray-700 rounded-lg p-4 hover:bg-gray-600 transition-colors"
+                  >
+                    <div className="flex justify-between items-start">
+                      <span className="px-2 py-1 bg-blue-600 text-white text-sm rounded">
+                        ID: {course.id}
+                      </span>
+                    </div>
+                    <div className="mt-2 text-white font-medium">{course.name}</div>
                   </div>
                 ))}
               </div>
 
               {totalPages > 1 && (
-                <div className="pagination">
+                <div className="flex justify-center items-center gap-2 mt-6">
                   <button
-                    className="pagination-btn"
+                    className="px-3 py-1 bg-gray-700 text-gray-300 rounded hover:bg-gray-600 disabled:opacity-50"
                     onClick={() => setCurrentPage(1)}
                     disabled={currentPage === 1}
-                    aria-label="Go to first page"
                   >
                     « First
                   </button>
                   <button
-                    className="pagination-btn"
+                    className="px-3 py-1 bg-gray-700 text-gray-300 rounded hover:bg-gray-600 disabled:opacity-50"
                     onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                     disabled={currentPage === 1}
-                    aria-label="Go to previous page"
                   >
                     ‹ Previous
                   </button>
-                  <span className="page-info">
+                  <span className="text-gray-400">
                     Page {currentPage} of {totalPages}
                   </span>
                   <button
-                    className="pagination-btn"
+                    className="px-3 py-1 bg-gray-700 text-gray-300 rounded hover:bg-gray-600 disabled:opacity-50"
                     onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
                     disabled={currentPage === totalPages}
-                    aria-label="Go to next page"
                   >
                     Next ›
                   </button>
                   <button
-                    className="pagination-btn"
+                    className="px-3 py-1 bg-gray-700 text-gray-300 rounded hover:bg-gray-600 disabled:opacity-50"
                     onClick={() => setCurrentPage(totalPages)}
                     disabled={currentPage === totalPages}
-                    aria-label="Go to last page"
                   >
                     Last »
                   </button>
@@ -582,7 +480,86 @@ const CourseManagement = () => {
         </div>
       </div>
 
-      {renderAddCourseModal()}
+      {showModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-gray-800 rounded-lg p-6 max-w-md w-full" onClick={e => e.stopPropagation()}>
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-xl font-bold text-white">Add New Course</h3>
+              <button
+                className="text-gray-400 hover:text-white"
+                onClick={() => !actionLoading && setShowModal(false)}
+                disabled={actionLoading}
+              >
+                ×
+              </button>
+            </div>
+
+            <form onSubmit={handleAddCourse}>
+              <div className="mb-4">
+                <label htmlFor="courseName" className="block text-gray-300 mb-2">
+                  Course Name:
+                </label>
+                <input
+                  type="text"
+                  id="courseName"
+                  value={newCourseName}
+                  onChange={(e) => setNewCourseName(e.target.value)}
+                  placeholder="Enter course name"
+                  className={`w-full px-4 py-2 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${validationErrors.courseName ? 'border-red-500' : ''
+                    }`}
+                  required
+                  autoFocus
+                  disabled={actionLoading}
+                />
+                {validationErrors.courseName && (
+                  <p className="text-red-500 text-sm mt-1">{validationErrors.courseName}</p>
+                )}
+                <p className="text-gray-400 text-sm mt-1">
+                  A unique ID will be automatically generated for this course
+                </p>
+              </div>
+
+              <div className="flex justify-end gap-2">
+                <button
+                  type="button"
+                  className="px-4 py-2 bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600"
+                  onClick={() => !actionLoading && setShowModal(false)}
+                  disabled={actionLoading}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                  disabled={actionLoading}
+                >
+                  {actionLoading ? (
+                    <div className="flex items-center gap-2">
+                      <LoadingSpinner size="small" />
+                      Adding...
+                    </div>
+                  ) : (
+                    'Add Course'
+                  )}
+                </button>
+              </div>
+
+              {actionLoading && (
+                <div className="mt-4 p-4 bg-gray-700 rounded-lg">
+                  <div className="flex items-center gap-2 text-gray-300">
+                    <span>⛓️</span>
+                    <span>Transaction in progress...</span>
+                  </div>
+                  <p className="text-gray-400 text-sm mt-2">
+                    Please wait while your transaction is being processed on the blockchain.
+                    This may take a few moments.
+                  </p>
+                </div>
+              )}
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

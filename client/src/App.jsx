@@ -16,6 +16,7 @@ import Footer from './components/Shared/Footer';
 function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [userAccount, setUserAccount] = useState(null);
+  const [isInstitution, setIsInstitution] = useState(false);
 
   useEffect(() => {
     const initializeApp = async () => {
@@ -27,14 +28,20 @@ function App() {
 
           if (accounts && accounts.length > 0) {
             setUserAccount(accounts[0]);
+            // TODO: Add logic to check if the account is an institution
+            // For now, we'll set it to true for testing
+            setIsInstitution(true);
           }
 
           // Listen for account changes
           window.ethereum.on('accountsChanged', (accounts) => {
             if (accounts.length > 0) {
               setUserAccount(accounts[0]);
+              // TODO: Add logic to check if the new account is an institution
+              setIsInstitution(true);
             } else {
               setUserAccount(null);
+              setIsInstitution(false);
             }
           });
         }
@@ -106,7 +113,7 @@ function App() {
               <Route path="issue" element={<IssueCertificate />} />
               <Route path="verify" element={<VerifyCertificates />} />
               <Route path="update" element={<CertificateUpdate />} />
-              <Route path="courses" element={<ManageCourses />} />
+              <Route path="courses" element={<ManageCourses isInstitution={isInstitution} />} />
               <Route path="institutions" element={<ManageInstitutions />} />
 
               {/* Catch-all for dashboard */}

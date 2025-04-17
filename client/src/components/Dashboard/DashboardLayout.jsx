@@ -5,13 +5,11 @@ import Sidebar from '../Shared/Sidebar';
 
 const DashboardLayout = () => {
     return (
-        <div className="min-h-screen bg-gray-950">
-            <div className="sticky top-0 z-50">
-                <Navbar />
-            </div>
+        <div className="min-h-screen bg-gray-950 mt-7">
+         
 
             <div className="flex">
-                <div className="flex-none">
+                <div className="flex-none ">
                     <Sidebar />
                 </div>
                 <div className="flex-grow p-6 transition-all duration-300">
