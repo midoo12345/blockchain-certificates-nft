@@ -12,6 +12,7 @@ import ManageCourses from './pages/Dashboard/ManageCourses';
 import ManageInstitutions from './pages/Dashboard/ManageInstitutions';
 import Dashboard from './pages/Dashboard/Dashboard';
 import Footer from './components/Shared/Footer';
+import { Toaster } from 'react-hot-toast';
 
 function App() {
   const [isLoading, setIsLoading] = useState(true);
@@ -127,6 +128,7 @@ function App() {
 
         {/* Footer shown on all pages */}
         <Footer />
+        <Toaster position="top-center" />
       </div>
     </Router>
   );
