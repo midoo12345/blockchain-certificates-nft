@@ -15,12 +15,35 @@ const CertificatesList = () => {
   const [showMetadata, setShowMetadata] = useState(false);
   const [showImage, setShowImage] = useState(false);
   const [imageLoading, setImageLoading] = useState(false);
+  const [contract, setContract] = useState(null);
 
   useEffect(() => {
-    fetchCertificates();
+    initializeContract();
   }, []);
 
-  const fetchCertificates = async () => {
+  const initializeContract = async () => {
+    try {
+      if (!window.ethereum) {
+        throw new Error('Ethereum provider is not available');
+      }
+
+      const provider = new BrowserProvider(window.ethereum);
+      const contract = new Contract(
+        contractAddress.CertificateNFT,
+        contractABI.CertificateNFT,
+        provider
+      );
+
+      setContract(contract);
+      fetchCertificates(contract);
+    } catch (err) {
+      console.error('Error initializing contract:', err);
+      setError(`Failed to initialize contract: ${err.message}`);
+      setLoading(false);
+    }
+  };
+
+  const fetchCertificates = async (contractInstance) => {
     try {
       setLoading(true);
       setError('');
@@ -33,55 +56,15 @@ const CertificatesList = () => {
       const signer = await provider.getSigner();
       const account = await signer.getAddress();
 
-      const contract = new Contract(
-        contractAddress.CertificateNFT,
-        contractABI.CertificateNFT,
-        provider
-      );
-
-      const balance = await contract.balanceOf(account);
+      const balance = await contractInstance.balanceOf(account);
       const certs = [];
 
       for (let i = 0; i < balance; i++) {
-        const tokenId = await contract.tokenOfOwnerByIndex(account, i);
-        const cert = await contract.getCertificate(tokenId);
-        const courseName = await contract.getCourseName(cert[2]);
-        const tokenURI = await contract.tokenURI(tokenId);
-
-        // Fetch metadata from IPFS using Pinata gateway
-        let metadata = null;
-        let imageUrl = null;
-
-        if (tokenURI) {
-          try {
-            const ipfsUrl = tokenURI.replace('ipfs://', `https://${PINATA_CONFIG.gateway}/ipfs/`);
-            const response = await fetch(ipfsUrl);
-            if (response.ok) {
-              metadata = await response.json();
-              if (metadata.image) {
-                imageUrl = metadata.image.replace('ipfs://', `https://${PINATA_CONFIG.gateway}/ipfs/`);
-              }
-            }
-          } catch (err) {
-            console.error('Error fetching metadata:', err);
-          }
+        const tokenId = await contractInstance.tokenOfOwnerByIndex(account, i);
+        const certificateData = await fetchCertificateData(contractInstance, tokenId);
+        if (certificateData) {
+          certs.push(certificateData);
         }
-
-        certs.push({
-          id: tokenId.toString(),
-          student: cert[0],
-          institution: cert[1],
-          courseId: cert[2].toString(),
-          courseName: courseName || `Course #${cert[2]}`,
-          completionDate: new Date(Number(cert[3]) * 1000).toLocaleDateString(),
-          grade: Number(cert[4]),
-          isVerified: cert[5],
-          isRevoked: cert[6],
-          revocationReason: cert[7],
-          tokenURI: tokenURI,
-          metadata: metadata,
-          imageUrl: imageUrl
-        });
       }
 
       setCertificates(certs);
@@ -90,6 +73,115 @@ const CertificatesList = () => {
       setError(`Failed to fetch certificates: ${err.message}`);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchCertificateData = async (contractInstance, tokenId) => {
+    try {
+      console.log(`Fetching data for token ID ${tokenId}:`);
+      
+      // Get certificate data from contract
+      const cert = await contractInstance.getCertificate(tokenId);
+      console.log(`Certificate data from contract:`, {
+        student: cert[0],
+        institution: cert[1],
+        courseId: cert[2].toString(),
+        completionDate: new Date(Number(cert[3]) * 1000).toLocaleDateString(),
+        grade: Number(cert[4]),
+        isVerified: cert[5],
+        isRevoked: cert[6],
+        revocationReason: cert[7],
+        version: cert[8],
+        lastUpdateDate: cert[9],
+        updateReason: cert[10]
+      });
+
+      // Get token URI and certificate hash
+      let tokenURI = await contractInstance.tokenURI(tokenId);
+      console.log(`Token URI for ${tokenId}:`, tokenURI);
+
+      // If tokenURI is empty, try using certificateHash from contract data
+      if (!tokenURI || tokenURI === '') {
+        // Get certificate hash from contract data (stored in academicCertificates)
+        const certData = await contractInstance.academicCertificates(tokenId);
+        if (certData && certData.certificateHash) {
+          tokenURI = certData.certificateHash;
+          console.log(`Using certificateHash as fallback for token ${tokenId}:`, tokenURI);
+        }
+      }
+
+      // If we have a tokenURI or certificateHash, fetch the metadata
+      let metadata = null;
+      let imageCID = null;
+      let imageUrl = null;
+
+      if (tokenURI && tokenURI !== '') {
+        // Remove ipfs:// prefix if present
+        const metadataCID = tokenURI.startsWith('ipfs://') ? tokenURI.slice(7) : tokenURI;
+        console.log(`Fetching metadata from CID: ${metadataCID}`);
+        
+        try {
+          // Fetch metadata from Pinata
+          const ipfsUrl = `https://${PINATA_CONFIG.gateway}/ipfs/${metadataCID}`;
+          console.log(`Fetching from IPFS URL: ${ipfsUrl}`);
+          
+          const response = await fetch(ipfsUrl);
+          if (response.ok) {
+            metadata = await response.json();
+            console.log(`Metadata for token ${tokenId}:`, metadata);
+            
+            // Get image CID from metadata
+            if (metadata.image) {
+              imageCID = metadata.image.startsWith('ipfs://') ? 
+                metadata.image.slice(7) : metadata.image;
+              imageUrl = `https://${PINATA_CONFIG.gateway}/ipfs/${imageCID}`;
+              console.log(`Image URL constructed: ${imageUrl}`);
+            } else {
+              console.log('No image field found in metadata');
+            }
+          } else {
+            console.error(`Failed to fetch metadata: ${response.status} ${response.statusText}`);
+          }
+        } catch (error) {
+          console.error(`Error fetching metadata for token ${tokenId}:`, error);
+        }
+      } else {
+        console.log(`No tokenURI or certificateHash found for token ${tokenId}`);
+      }
+
+      // Get the certificate hash from contract data
+      const certData = await contractInstance.academicCertificates(tokenId);
+      const certificateHash = certData.certificateHash || '';
+
+      // Return all the data we've gathered
+      const certificateData = {
+        tokenId,
+        tokenURI: tokenURI || '',
+        certificateHash,
+        metadataCID: tokenURI && tokenURI !== '' ? 
+          (tokenURI.startsWith('ipfs://') ? tokenURI.slice(7) : tokenURI) : null,
+        imageCID,
+        imageUrl,
+        metadata,
+        // Include additional certificate data
+        student: cert[0],
+        institution: cert[1],
+        courseId: cert[2].toString(),
+        completionDate: new Date(Number(cert[3]) * 1000).toLocaleDateString(),
+        grade: Number(cert[4]),
+        isVerified: cert[5],
+        isRevoked: cert[6],
+        revocationReason: cert[7],
+        version: cert[8],
+        lastUpdateDate: cert[9],
+        updateReason: cert[10]
+      };
+
+      console.log(`Certificate ${tokenId} final data:`, certificateData);
+      return certificateData;
+    } catch (error) {
+      console.error(`Error fetching certificate ${tokenId}:`, error);
+      return null;
     }
   };
 
@@ -227,6 +319,9 @@ const CertificatesList = () => {
               <p><span className="text-gray-400">Completion Date:</span> {selectedCertificate.completionDate}</p>
               <p><span className="text-gray-400">Grade:</span> {formatGrade(selectedCertificate.grade)} ({selectedCertificate.grade}%)</p>
               <p><span className="text-gray-400">Status:</span> {selectedCertificate.isRevoked ? 'Revoked' : selectedCertificate.isVerified ? 'Verified' : 'Pending'}</p>
+              {selectedCertificate.imageCID && (
+                <p><span className="text-gray-400">Image CID:</span> {selectedCertificate.imageCID}</p>
+              )}
               {selectedCertificate.revocationReason && (
                 <p><span className="text-gray-400">Revocation Reason:</span> {selectedCertificate.revocationReason}</p>
               )}
@@ -257,26 +352,35 @@ const CertificatesList = () => {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-gray-800 rounded-lg p-6 max-w-4xl w-full">
             <h3 className="text-2xl font-bold mb-4 text-blue-400">Certificate Image</h3>
-            <div className="flex justify-center">
-              {imageLoading ? (
-                <div className="flex items-center justify-center h-64">
+            <div className="relative flex justify-center">
+              {imageLoading && (
+                <div className="absolute inset-0 flex items-center justify-center bg-gray-800/50">
                   <FaSpinner className="animate-spin text-4xl text-blue-500" />
                 </div>
-              ) : null}
+              )}
               <img
                 src={selectedCertificate.imageUrl || placeholderImage}
-                alt="Certificate"
-                className={`max-w-full h-auto rounded-lg ${imageLoading ? 'hidden' : 'block'}`}
+                alt={`Certificate ${selectedCertificate.id}`}
+                className="max-w-full h-auto rounded-lg shadow-xl"
                 onLoad={handleImageLoad}
                 onError={handleImageError}
+                style={{ maxHeight: '70vh' }}
               />
             </div>
-            <button
-              onClick={closeModal}
-              className="mt-6 px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors duration-300"
-            >
-              Close
-            </button>
+            <div className="mt-6 flex justify-between items-center">
+              <span className="text-sm text-gray-400">
+                Certificate ID: {selectedCertificate.id}
+                {selectedCertificate.imageCID && (
+                  <> | CID: {selectedCertificate.imageCID}</>
+                )}
+              </span>
+              <button
+                onClick={closeModal}
+                className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors duration-300"
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
       )}

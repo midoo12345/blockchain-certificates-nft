@@ -9,6 +9,8 @@
     "start": "cd client && npm start"
   },
   "dependencies": {
+    "@fortawesome/fontawesome-free": "^6.7.2",
+    "@heroicons/react": "^2.2.0",
     "@openzeppelin/contracts": "^5.2.0",
     "dotenv": "^16.5.0",
     "ipfs-http-client": "^60.0.1",

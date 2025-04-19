@@ -86,12 +86,11 @@ function App() {
 
   return (
     <Router>
-      <div className="App flex flex-col min-h-screen bg-slate-950">
-        {/* Navbar shown on all pages */}
+      <div className="min-h-screen bg-slate-950">
         <Navbar userAccount={userAccount} />
-
-        {/* Main content area */}
-        <div className="flex-grow">
+        
+        {/* Main content with proper spacing */}
+        <main className="pt-16">
           <Routes>
             {/* Public route */}
             <Route path="/" element={<LandingPage />} />
@@ -126,7 +125,7 @@ function App() {
             {/* Global catch-all */}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
-        </div>
+        </main>
 
         {/* Footer shown on all pages */}
         <Footer />
