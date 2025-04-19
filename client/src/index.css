@@ -211,4 +211,10 @@ body {
   100% {
     fill: white;
   }
+
+  /* team component*/
+/* Remove all transition pauses */
+.swiper-wrapper {
+  transition-timing-function: linear !important;
+}
 }

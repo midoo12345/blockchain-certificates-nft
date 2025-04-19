@@ -13,6 +13,9 @@
     "dotenv": "^16.5.0",
     "ipfs-http-client": "^60.0.1",
     "react-hot-toast": "^2.5.2",
+    "react-slick": "^0.30.3",
+    "slick-carousel": "^1.8.1",
+    "swiper": "^11.2.6",
     "web3": "^4.5.0"
   },
   "devDependencies": {

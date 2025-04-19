@@ -13,6 +13,8 @@ import ManageInstitutions from './pages/Dashboard/ManageInstitutions';
 import Dashboard from './pages/Dashboard/Dashboard';
 import Footer from './components/Shared/Footer';
 import { Toaster } from 'react-hot-toast';
+import "slick-carousel/slick/slick.css";
+import "slick-carousel/slick/slick-theme.css";
 
 function App() {
   const [isLoading, setIsLoading] = useState(true);
